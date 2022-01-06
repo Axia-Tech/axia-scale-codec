@@ -237,7 +237,7 @@
 #[doc(hidden)]
 pub extern crate alloc;
 
-#[cfg(feature = "parity-scale-codec-derive")]
+#[cfg(feature = "axia-scale-codec-derive")]
 #[allow(unused_imports)]
 #[macro_use]
 extern crate parity_scale_codec_derive;
@@ -246,7 +246,7 @@ extern crate parity_scale_codec_derive;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "parity-scale-codec-derive")]
+#[cfg(feature = "axia-scale-codec-derive")]
 pub use parity_scale_codec_derive::*;
 
 #[cfg(feature = "std")]

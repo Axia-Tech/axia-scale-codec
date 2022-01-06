@@ -33,13 +33,13 @@ mod encode;
 mod utils;
 mod trait_bounds;
 
-/// Include the `parity-scale-codec` crate under a known name (`_parity_scale_codec`).
+/// Include the `axia-scale-codec` crate under a known name (`_parity_scale_codec`).
 fn include_parity_scale_codec_crate() -> proc_macro2::TokenStream {
 	// This "hack" is required for the tests.
-	if std::env::var("CARGO_PKG_NAME").unwrap() == "parity-scale-codec" {
+	if std::env::var("CARGO_PKG_NAME").unwrap() == "axia-scale-codec" {
 		quote!( extern crate parity_scale_codec as _parity_scale_codec; )
 	} else {
-		match crate_name("parity-scale-codec") {
+		match crate_name("axia-scale-codec") {
 			Ok(parity_codec_crate) => {
 				let ident = Ident::new(&parity_codec_crate, Span::call_site());
 				quote!( extern crate #ident as _parity_scale_codec; )
