@@ -69,8 +69,7 @@ Following are some examples to demonstrate usage of the codec.
 
 ```rust
 
-use axia_scale_codec::{Encode, Decode};
-use axia_scale_codec_derive::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum EnumType {
@@ -117,8 +116,7 @@ assert_eq!(EnumType::decode(&mut dz).ok(), None);
 
 ```rust
 
-use axia_scale_codec::{Encode, Decode, Compact, HasCompact};
-use axia_scale_codec_derive::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode, Compact, HasCompact};
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct Test1CompactHasCompact<T: HasCompact> {
@@ -144,7 +142,7 @@ assert_eq!(<Test1CompactHasCompact<u64>>::decode(&mut &encoded[..]).unwrap().bar
 ```rust
 
 use serde_derive::{Serialize, Deserialize};
-use axia_scale_codec::{Encode, Decode, Compact, HasCompact, CompactAs, Error};
+use parity_scale_codec::{Encode, Decode, Compact, HasCompact, CompactAs, Error};
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(PartialEq, Eq, Clone)]

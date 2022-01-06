@@ -20,19 +20,27 @@
 use std::str::FromStr;
 
 use proc_macro2::TokenStream;
-use quote::quote;
 use syn::{
-	Attribute, Data, DeriveInput, Field, Fields, FieldsNamed, FieldsUnnamed, Lit, Meta,
-	MetaNameValue, NestedMeta, parse::Parse, Path, punctuated::Punctuated,
-	spanned::Spanned, token, Variant,
+	spanned::Spanned,
+	Meta, NestedMeta, Lit, Attribute, Variant, Field, DeriveInput, Fields, Data, FieldsUnnamed,
+	FieldsNamed, MetaNameValue
 };
 
-fn find_meta_item<'a, F, R, I, M>(mut itr: I, mut pred: F) -> Option<R> where
-	F: FnMut(M) -> Option<R> + Clone,
-	I: Iterator<Item=&'a Attribute>,
-	M: Parse,
+fn find_meta_item<'a, F, R, I>(itr: I, pred: F) -> Option<R> where
+	F: FnMut(&NestedMeta) -> Option<R> + Clone,
+	I: Iterator<Item=&'a Attribute>
 {
-	itr.find_map(|attr| attr.path.is_ident("codec").then(|| pred(attr.parse_args().ok()?)).flatten())
+	itr.filter_map(|attr| {
+		if attr.path.is_ident("codec") {
+			if let Meta::List(ref meta_list) = attr.parse_meta()
+				.expect("Internal error, parse_meta must have been checked")
+			{
+				return meta_list.nested.iter().filter_map(pred.clone()).next();
+			}
+		}
+
+		None
+	}).next()
 }
 
 /// Look for a `#[scale(index = $int)]` attribute on a variant. If no attribute
@@ -120,120 +128,6 @@ pub fn has_dumb_trait_bound(attrs: &[Attribute]) -> bool {
 	}).is_some()
 }
 
-/// Generate the crate access for the crate using 2018 syntax.
-#[cfg(feature = "max-encoded-len")]
-fn crate_access() -> syn::Result<proc_macro2::Ident> {
-	use proc_macro_crate::{crate_name, FoundCrate};
-	use proc_macro2::{Span, Ident};
-	const DEF_CRATE: &str = "axia-scale-codec";
-	match crate_name(DEF_CRATE) {
-		Ok(FoundCrate::Itself) => {
-			let name = DEF_CRATE.to_string().replace("-", "_");
-			Ok(syn::Ident::new(&name, Span::call_site()))
-		}
-		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
-		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
-	}
-}
-
-/// This struct matches `crate = ...` where the ellipsis is a `Path`.
-struct CratePath {
-	_crate_token: Token![crate],
-	_eq_token: Token![=],
-	path: Path,
-}
-
-impl Parse for CratePath {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(CratePath {
-			_crate_token: input.parse()?,
-			_eq_token: input.parse()?,
-			path: input.parse()?,
-		})
-    }
-}
-
-impl From<CratePath> for Path {
-    fn from(CratePath { path, ..}: CratePath) -> Self {
-        path
-    }
-}
-
-/// Match `#[codec(crate = ...)]` and return the `...` if it is a `Path`.
-fn codec_crate_path_inner(attr: &Attribute) -> Option<Path> {
-	// match `#[codec ...]`
-	attr.path.is_ident("codec").then(move || {
-		// match `#[codec(crate = ...)]` and return the `...`
-		attr.parse_args::<CratePath>().map(Into::into).ok()
-	}).flatten()
-}
-
-/// Match `#[codec(crate = ...)]` and return the ellipsis as a `Path`.
-///
-/// If not found, returns the default crate access pattern.
-///
-/// If multiple items match the pattern, all but the first are ignored.
-#[cfg(feature = "max-encoded-len")]
-pub fn codec_crate_path(attrs: &[Attribute]) -> syn::Result<Path> {
-	match attrs.iter().find_map(codec_crate_path_inner) {
-		Some(path) => Ok(path),
-		None => crate_access().map(|ident| ident.into()),
-	}
-}
-
-/// Trait bounds.
-pub type TraitBounds = Punctuated<syn::WherePredicate, token::Comma>;
-
-/// Parse `name(T: Bound, N: Bound)` as a custom trait bound.
-struct CustomTraitBound<N> {
-	_name: N,
-	_paren_token: token::Paren,
-	bounds: TraitBounds,
-}
-
-impl<N: Parse> Parse for CustomTraitBound<N> {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let content;
-		Ok(Self {
-			_name: input.parse()?,
-			_paren_token: syn::parenthesized!(content in input),
-			bounds: content.parse_terminated(syn::WherePredicate::parse)?,
-		})
-	}
-}
-
-syn::custom_keyword!(encode_bound);
-syn::custom_keyword!(decode_bound);
-syn::custom_keyword!(mel_bound);
-
-/// Look for a `#[codec(decode_bound(T: Decode))]` in the given attributes.
-///
-/// If found, it should be used as trait bounds when deriving the `Decode` trait.
-pub fn custom_decode_trait_bound(attrs: &[Attribute]) -> Option<TraitBounds> {
-	find_meta_item(attrs.iter(), |meta: CustomTraitBound<decode_bound>| {
-		Some(meta.bounds)
-	})
-}
-
-/// Look for a `#[codec(encode_bound(T: Encode))]` in the given attributes.
-///
-/// If found, it should be used as trait bounds when deriving the `Encode` trait.
-pub fn custom_encode_trait_bound(attrs: &[Attribute]) -> Option<TraitBounds> {
-	find_meta_item(attrs.iter(), |meta: CustomTraitBound<encode_bound>| {
-		Some(meta.bounds)
-	})
-}
-
-/// Look for a `#[codec(mel_bound(T: MaxEncodedLen))]` in the given attributes.
-///
-/// If found, it should be used as the trait bounds when deriving the `MaxEncodedLen` trait.
-#[cfg(feature = "max-encoded-len")]
-pub fn custom_mel_trait_bound(attrs: &[Attribute]) -> Option<TraitBounds> {
-	find_meta_item(attrs.iter(), |meta: CustomTraitBound<mel_bound>| {
-		Some(meta.bounds)
-	})
-}
-
 /// Given a set of named fields, return an iterator of `Field` where all fields
 /// marked `#[codec(skip)]` are filtered out.
 pub fn filter_skip_named<'a>(fields: &'a syn::FieldsNamed) -> impl Iterator<Item=&Field> + 'a {
@@ -252,23 +146,12 @@ pub fn filter_skip_unnamed<'a>(fields: &'a syn::FieldsUnnamed) -> impl Iterator<
 /// Ensure attributes are correctly applied. This *must* be called before using
 /// any of the attribute finder methods or the macro may panic if it encounters
 /// misapplied attributes.
-///
-/// The top level can have the following attributes:
-///
-/// * `#[codec(dumb_trait_bound)]`
-/// * `#[codec(encode_bound(T: Encode))]`
-/// * `#[codec(decode_bound(T: Decode))]`
-/// * `#[codec(mel_bound(T: MaxEncodedLen))]`
-/// * `#[codec(crate = path::to::crate)]
-///
+/// `#[codec(dumb_trait_bound)]` is the only accepted top attribute.
 /// Fields can have the following attributes:
-///
 /// * `#[codec(skip)]`
 /// * `#[codec(compact)]`
 /// * `#[codec(encoded_as = "$EncodeAs")]` with $EncodedAs a valid TokenStream
-///
 /// Variants can have the following attributes:
-///
 /// * `#[codec(skip)]`
 /// * `#[codec(index = $int)]`
 pub fn check_attributes(input: &DeriveInput) -> syn::Result<()> {
@@ -303,14 +186,6 @@ pub fn check_attributes(input: &DeriveInput) -> syn::Result<()> {
 		Data::Union(_) => (),
 	}
 	Ok(())
-}
-
-// Check if the attribute is `#[allow(..)]`, `#[deny(..)]`, `#[forbid(..)]` or `#[warn(..)]`.
-pub fn is_lint_attribute(attr: &Attribute) -> bool {
-	attr.path.is_ident("allow")
-		|| attr.path.is_ident("deny")
-		|| attr.path.is_ident("forbid")
-		|| attr.path.is_ident("warn")
 }
 
 // Ensure a field is decorated only with the following attributes:
@@ -377,26 +252,19 @@ fn check_variant_attribute(attr: &Attribute) -> syn::Result<()> {
 
 // Only `#[codec(dumb_trait_bound)]` is accepted as top attribute
 fn check_top_attribute(attr: &Attribute) -> syn::Result<()> {
-	let top_error = "Invalid attribute: only `#[codec(dumb_trait_bound)]`, \
-		`#[codec(crate = path::to::crate)]`, `#[codec(encode_bound(T: Encode))]`, \
-		`#[codec(decode_bound(T: Decode))]`, or `#[codec(mel_bound(T: MaxEncodedLen))]` \
-		are accepted as top attribute";
-	if attr.path.is_ident("codec")
-		&& attr.parse_args::<CustomTraitBound<encode_bound>>().is_err()
-		&& attr.parse_args::<CustomTraitBound<decode_bound>>().is_err()
-		&& attr.parse_args::<CustomTraitBound<mel_bound>>().is_err()
-		&& codec_crate_path_inner(attr).is_none()
-	{
+	let top_error = "Invalid attribute only `#[codec(dumb_trait_bound)]` is accepted as top \
+		attribute";
+	if attr.path.is_ident("codec") {
 		match attr.parse_meta()? {
 			Meta::List(ref meta_list) if meta_list.nested.len() == 1 => {
 				match meta_list.nested.first().expect("Just checked that there is one item; qed") {
-						NestedMeta::Meta(Meta::Path(path))
-							if path.get_ident().map_or(false, |i| i == "dumb_trait_bound") => Ok(()),
+					NestedMeta::Meta(Meta::Path(path))
+						if path.get_ident().map_or(false, |i| i == "dumb_trait_bound") => Ok(()),
 
-						elt @ _ => Err(syn::Error::new(elt.span(), top_error)),
-					}
-			}
-			_ => Err(syn::Error::new(attr.span(), top_error)),
+					elt @ _ => Err(syn::Error::new(elt.span(), top_error)),
+				}
+			},
+			meta @ _ => Err(syn::Error::new(meta.span(), top_error)),
 		}
 	} else {
 		Ok(())

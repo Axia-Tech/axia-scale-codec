@@ -1,4 +1,4 @@
-// Copyright 2017-2021 AXIA Technologies
+// Copyright 2017-2018 AXIA Technologies
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,48 +24,41 @@ extern crate syn;
 extern crate quote;
 
 use proc_macro2::{Ident, Span};
-use proc_macro_crate::{crate_name, FoundCrate};
+use proc_macro_crate::crate_name;
 use syn::spanned::Spanned;
 use syn::{Data, Field, Fields, DeriveInput, Error};
-use proc_macro2::TokenStream as TokenStream2;
-use crate::utils::is_lint_attribute;
 
 mod decode;
 mod encode;
-mod max_encoded_len;
 mod utils;
 mod trait_bounds;
 
-/// Returns the identifier of the `axia-scale-codec` crate as used.
-///
-/// The identifier might change if the depending crate imported it
-/// using a custom package name.
-fn axia_scale_codec_ident() -> Result<TokenStream2, Error> {
-	static CRATE_NAME: &str = "axia-scale-codec";
-	fn root_import(name: &str) -> TokenStream2 {
-		let ident = Ident::new(name, Span::call_site());
-		quote!{ :: #ident }
-	}
+/// Include the `parity-scale-codec` crate under a known name (`_parity_scale_codec`).
+fn include_parity_scale_codec_crate() -> proc_macro2::TokenStream {
 	// This "hack" is required for the tests.
-	if std::env::var("CARGO_PKG_NAME").unwrap() == CRATE_NAME {
-		Ok(root_import("axia_scale_codec"))
+	if std::env::var("CARGO_PKG_NAME").unwrap() == "parity-scale-codec" {
+		quote!( extern crate parity_scale_codec as _parity_scale_codec; )
 	} else {
-		match crate_name(CRATE_NAME) {
-			Ok(FoundCrate::Itself) => {
-				Ok(quote! { crate })
-			}
-			Ok(FoundCrate::Name(custom_name)) => Ok(root_import(&custom_name)),
-			Err(e) => Err(Error::new(Span::call_site(), &e)),
+		match crate_name("parity-scale-codec") {
+			Ok(parity_codec_crate) => {
+				let ident = Ident::new(&parity_codec_crate, Span::call_site());
+				quote!( extern crate #ident as _parity_scale_codec; )
+			},
+			Err(e) => Error::new(Span::call_site(), &e).to_compile_error(),
 		}
 	}
 }
 
 /// Wraps the impl block in a "dummy const"
-fn wrap_with_dummy_const(input: DeriveInput, impl_block: proc_macro2::TokenStream) -> proc_macro::TokenStream {
-	let attrs = input.attrs.into_iter().filter(is_lint_attribute);
+fn wrap_with_dummy_const(impl_block: proc_macro2::TokenStream) -> proc_macro::TokenStream {
+	let parity_codec_crate = include_parity_scale_codec_crate();
+
 	let generated = quote! {
 		const _: () = {
-			#(#attrs)*
+			#[allow(unknown_lints)]
+			#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
+			#[allow(rust_2018_idioms)]
+			#parity_codec_crate
 			#impl_block
 		};
 	};
@@ -73,7 +66,7 @@ fn wrap_with_dummy_const(input: DeriveInput, impl_block: proc_macro2::TokenStrea
 	generated.into()
 }
 
-/// Derive `axia_scale_codec::Encode` and `axia_scale_codec::EncodeLike` for struct and enum.
+/// Derive `parity_scale_codec::Encode` and `parity_scale_codec::EncodeLike` for struct and enum.
 ///
 /// # Struct
 ///
@@ -82,23 +75,21 @@ fn wrap_with_dummy_const(input: DeriveInput, impl_block: proc_macro2::TokenStrea
 /// Fields can have some attributes:
 /// * `#[codec(skip)]`: the field is not encoded. It must derive `Default` if Decode is derived.
 /// * `#[codec(compact)]`: the field is encoded in its compact representation i.e. the field must
-///   implement `axia_scale_codec::HasCompact` and will be encoded as `HasCompact::Type`.
+///   implement `parity_scale_codec::HasCompact` and will be encoded as `HasCompact::Type`.
 /// * `#[codec(encoded_as = "$EncodeAs")]`: the field is encoded as an alternative type. $EncodedAs
-///   type must implement `axia_scale_codec::EncodeAsRef<'_, $FieldType>` with $FieldType the
+///   type must implement `parity_scale_codec::EncodeAsRef<'_, $FieldType>` with $FieldType the
 ///   type of the field with the attribute. This is intended to be used for types implementing
 ///   `HasCompact` as shown in the example.
-/// * `#[codec(encode_bound(T: Encode))]`: a custom where bound that will be used when deriving the `Encode` trait.
-/// * `#[codec(decode_bound(T: Encode))]`: a custom where bound that will be used when deriving the `Decode` trait.
 ///
 /// ```
-/// # use axia_scale_codec_derive::Encode;
-/// # use axia_scale_codec::{Encode as _, HasCompact};
+/// # use parity_scale_codec_derive::Encode;
+/// # use parity_scale_codec::{Encode as _, HasCompact};
 /// #[derive(Encode)]
 /// struct StructType {
 ///		#[codec(skip)]
 ///		a: u32,
 ///		#[codec(compact)]
-///		b: u32,
+/// 	b: u32,
 ///		#[codec(encoded_as = "<u32 as HasCompact>::Type")]
 ///		c: u32,
 /// }
@@ -121,8 +112,8 @@ fn wrap_with_dummy_const(input: DeriveInput, impl_block: proc_macro2::TokenStrea
 /// field attributes: same as struct fields attributes.
 ///
 /// ```
-/// # use axia_scale_codec_derive::Encode;
-/// # use axia_scale_codec::Encode as _;
+/// # use parity_scale_codec_derive::Encode;
+/// # use parity_scale_codec::Encode as _;
 /// #[derive(Encode)]
 /// enum EnumType {
 /// 	#[codec(index = 15)]
@@ -149,23 +140,13 @@ pub fn encode_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 		return e.to_compile_error().into();
 	}
 
-	let crate_ident = match crate::axia_scale_codec_ident() {
-		Ok(crate_ident) => crate_ident,
-		Err(error) => {
-			return error.into_compile_error().into()
-		}
-	};
-
-	if let Some(custom_bound) = utils::custom_encode_trait_bound(&input.attrs) {
-		input.generics.make_where_clause().predicates.extend(custom_bound);
-	} else if let Err(e) = trait_bounds::add(
+	if let Err(e) = trait_bounds::add(
 		&input.ident,
 		&mut input.generics,
 		&input.data,
-		parse_quote!(#crate_ident::Encode),
+		parse_quote!(_parity_scale_codec::Encode),
 		None,
 		utils::has_dumb_trait_bound(&input.attrs),
-		&crate_ident,
 	) {
 		return e.to_compile_error().into();
 	}
@@ -173,20 +154,20 @@ pub fn encode_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 	let name = &input.ident;
 	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-	let encode_impl = encode::quote(&input.data, name, &crate_ident);
+	let encode_impl = encode::quote(&input.data, name);
 
 	let impl_block = quote! {
-		impl #impl_generics #crate_ident::Encode for #name #ty_generics #where_clause {
+		impl #impl_generics _parity_scale_codec::Encode for #name #ty_generics #where_clause {
 			#encode_impl
 		}
 
-		impl #impl_generics #crate_ident::EncodeLike for #name #ty_generics #where_clause {}
+		impl #impl_generics _parity_scale_codec::EncodeLike for #name #ty_generics #where_clause {}
 	};
 
-	wrap_with_dummy_const(input, impl_block)
+	wrap_with_dummy_const(impl_block)
 }
 
-/// Derive `axia_scale_codec::Decode` and for struct and enum.
+/// Derive `parity_scale_codec::Decode` and for struct and enum.
 ///
 /// see derive `Encode` documentation.
 #[proc_macro_derive(Decode, attributes(codec))]
@@ -200,48 +181,37 @@ pub fn decode_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 		return e.to_compile_error().into();
 	}
 
-	let crate_ident = match crate::axia_scale_codec_ident() {
-		Ok(crate_ident) => crate_ident,
-		Err(error) => {
-			return error.into_compile_error().into()
-		}
-	};
-
-	if let Some(custom_bound) = utils::custom_decode_trait_bound(&input.attrs) {
-		input.generics.make_where_clause().predicates.extend(custom_bound);
-	} else if let Err(e) = trait_bounds::add(
+	if let Err(e) = trait_bounds::add(
 		&input.ident,
 		&mut input.generics,
 		&input.data,
-		parse_quote!(#crate_ident::Decode),
+		parse_quote!(_parity_scale_codec::Decode),
 		Some(parse_quote!(Default)),
 		utils::has_dumb_trait_bound(&input.attrs),
-		&crate_ident,
 	) {
 		return e.to_compile_error().into();
 	}
 
 	let name = &input.ident;
 	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-	let ty_gen_turbofish = ty_generics.as_turbofish();
 
 	let input_ = quote!(__codec_input_edqy);
-	let decoding = decode::quote(&input.data, name, &quote!(#ty_gen_turbofish), &input_, &crate_ident);
+	let decoding = decode::quote(&input.data, name, &input_);
 
 	let impl_block = quote! {
-		impl #impl_generics #crate_ident::Decode for #name #ty_generics #where_clause {
-			fn decode<__CodecInputEdqy: #crate_ident::Input>(
+		impl #impl_generics _parity_scale_codec::Decode for #name #ty_generics #where_clause {
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
 				#input_: &mut __CodecInputEdqy
-			) -> ::core::result::Result<Self, #crate_ident::Error> {
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				#decoding
 			}
 		}
 	};
 
-	wrap_with_dummy_const(input, impl_block)
+	wrap_with_dummy_const(impl_block)
 }
 
-/// Derive `axia_scale_codec::Compact` and `axia_scale_codec::CompactAs` for struct with single
+/// Derive `parity_scale_codec::Compact` and `parity_scale_codec::CompactAs` for struct with single
 /// field.
 ///
 /// Attribute skip can be used to skip other fields.
@@ -249,8 +219,8 @@ pub fn decode_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # Example
 ///
 /// ```
-/// # use axia_scale_codec_derive::CompactAs;
-/// # use axia_scale_codec::{Encode, HasCompact};
+/// # use parity_scale_codec_derive::CompactAs;
+/// # use parity_scale_codec::{Encode, HasCompact};
 /// # use std::marker::PhantomData;
 /// #[derive(CompactAs)]
 /// struct MyWrapper<T>(u32, #[codec(skip)] PhantomData<T>);
@@ -266,21 +236,13 @@ pub fn compact_as_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 		return e.to_compile_error().into();
 	}
 
-	let crate_ident = match crate::axia_scale_codec_ident() {
-		Ok(crate_ident) => crate_ident,
-		Err(error) => {
-			return error.into_compile_error().into()
-		}
-	};
-
 	if let Err(e) = trait_bounds::add(
 		&input.ident,
 		&mut input.generics,
 		&input.data,
-		parse_quote!(#crate_ident::CompactAs),
+		parse_quote!(_parity_scale_codec::CompactAs),
 		None,
 		utils::has_dumb_trait_bound(&input.attrs),
-		&crate_ident,
 	) {
 		return e.to_compile_error().into();
 	}
@@ -336,33 +298,26 @@ pub fn compact_as_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	};
 
 	let impl_block = quote! {
-		impl #impl_generics #crate_ident::CompactAs for #name #ty_generics #where_clause {
+		impl #impl_generics _parity_scale_codec::CompactAs for #name #ty_generics #where_clause {
 			type As = #inner_ty;
 			fn encode_as(&self) -> &#inner_ty {
 				#inner_field
 			}
 			fn decode_from(x: #inner_ty)
-				-> ::core::result::Result<#name #ty_generics, #crate_ident::Error>
+				-> core::result::Result<#name #ty_generics, _parity_scale_codec::Error>
 			{
-				::core::result::Result::Ok(#constructor)
+				Ok(#constructor)
 			}
 		}
 
-		impl #impl_generics From<#crate_ident::Compact<#name #ty_generics>>
+		impl #impl_generics From<_parity_scale_codec::Compact<#name #ty_generics>>
 			for #name #ty_generics #where_clause
 		{
-			fn from(x: #crate_ident::Compact<#name #ty_generics>) -> #name #ty_generics {
+			fn from(x: _parity_scale_codec::Compact<#name #ty_generics>) -> #name #ty_generics {
 				x.0
 			}
 		}
 	};
 
-	wrap_with_dummy_const(input, impl_block)
-}
-
-/// Derive `MaxEncodedLen`.
-#[cfg(feature = "max-encoded-len")]
-#[proc_macro_derive(MaxEncodedLen, attributes(max_encoded_len_mod))]
-pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	max_encoded_len::derive_max_encoded_len(input)
+	wrap_with_dummy_const(impl_block)
 }

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #[cfg(not(feature="derive"))]
-use axia_scale_codec_derive::Decode;
-use axia_scale_codec::Decode;
+use parity_scale_codec_derive::Decode;
+use parity_scale_codec::Decode;
 
 #[derive(Decode, Debug)]
 struct Wrapper<T>(T);

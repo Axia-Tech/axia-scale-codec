@@ -20,31 +20,18 @@ use syn::{
 
 use crate::utils;
 
-/// Generate function block for function `Decode::decode`.
-///
-/// * data: data info of the type,
-/// * type_name: name of the type,
-/// * type_generics: the generics of the type in turbofish format, without bounds, e.g. `::<T, I>`
-/// * input: the variable name for the argument of function `decode`.
-pub fn quote(
-	data: &Data,
-	type_name: &Ident,
-	type_generics: &TokenStream,
-	input: &TokenStream,
-	crate_ident: &TokenStream,
-) -> TokenStream {
+pub fn quote(data: &Data, type_name: &Ident, input: &TokenStream) -> TokenStream {
 	match *data {
 		Data::Struct(ref data) => match data.fields {
 			Fields::Named(_) | Fields::Unnamed(_) => create_instance(
-				quote! { #type_name #type_generics },
+				quote! { #type_name },
 				&type_name.to_string(),
 				input,
 				&data.fields,
-				crate_ident,
 			),
 			Fields::Unit => {
 				quote_spanned! { data.fields.span() =>
-					::core::result::Result::Ok(#type_name)
+					Ok(#type_name)
 				}
 			},
 		},
@@ -63,15 +50,14 @@ pub fn quote(
 				let index = utils::variant_index(v, i);
 
 				let create = create_instance(
-					quote! { #type_name #type_generics :: #name },
+					quote! { #type_name :: #name },
 					&format!("{}::{}", type_name, name),
 					input,
 					&v.fields,
-					crate_ident,
 				);
 
 				quote_spanned! { v.span() =>
-					__codec_x_edqy if __codec_x_edqy == #index as ::core::primitive::u8 => {
+					__codec_x_edqy if __codec_x_edqy == #index as u8 => {
 						#create
 					},
 				}
@@ -90,9 +76,7 @@ pub fn quote(
 					.map_err(|e| e.chain(#read_byte_err_msg))?
 				{
 					#( #recurse )*
-					_ => ::core::result::Result::Err(
-						<_ as ::core::convert::Into<_>>::into(#invalid_variant_err_msg)
-					),
+					_ => Err(#invalid_variant_err_msg.into()),
 				}
 			}
 
@@ -101,7 +85,7 @@ pub fn quote(
 	}
 }
 
-fn create_decode_expr(field: &Field, name: &str, input: &TokenStream, crate_ident: &TokenStream) -> TokenStream {
+fn create_decode_expr(field: &Field, name: &str, input: &TokenStream) -> TokenStream {
 	let encoded_as = utils::get_encoded_as_type(field);
 	let compact = utils::is_compact(field);
 	let skip = utils::should_skip(&field.attrs);
@@ -122,34 +106,33 @@ fn create_decode_expr(field: &Field, name: &str, input: &TokenStream, crate_iden
 		quote_spanned! { field.span() =>
 			{
 				let #res = <
-					<#field_type as #crate_ident::HasCompact>::Type as #crate_ident::Decode
+					<#field_type as _parity_scale_codec::HasCompact>::Type as _parity_scale_codec::Decode
 				>::decode(#input);
 				match #res {
-					::core::result::Result::Err(e) => return ::core::result::Result::Err(e.chain(#err_msg)),
-					::core::result::Result::Ok(#res) => #res.into(),
+					Err(e) => return Err(e.chain(#err_msg)),
+					Ok(#res) => #res.into(),
 				}
 			}
 		}
 	} else if let Some(encoded_as) = encoded_as {
 		quote_spanned! { field.span() =>
 			{
-				let #res = <#encoded_as as #crate_ident::Decode>::decode(#input);
+				let #res = <#encoded_as as _parity_scale_codec::Decode>::decode(#input);
 				match #res {
-					::core::result::Result::Err(e) => return ::core::result::Result::Err(e.chain(#err_msg)),
-					::core::result::Result::Ok(#res) => #res.into(),
+					Err(e) => return Err(e.chain(#err_msg)),
+					Ok(#res) => #res.into(),
 				}
 			}
 		}
 	} else if skip {
-		quote_spanned! { field.span() => ::core::default::Default::default() }
+		quote_spanned! { field.span() => Default::default() }
 	} else {
-		let field_type = &field.ty;
 		quote_spanned! { field.span() =>
 			{
-				let #res = <#field_type as #crate_ident::Decode>::decode(#input);
+				let #res = _parity_scale_codec::Decode::decode(#input);
 				match #res {
-					::core::result::Result::Err(e) => return ::core::result::Result::Err(e.chain(#err_msg)),
-					::core::result::Result::Ok(#res) => #res,
+					Err(e) => return Err(e.chain(#err_msg)),
+					Ok(#res) => #res,
 				}
 			}
 		}
@@ -160,8 +143,7 @@ fn create_instance(
 	name: TokenStream,
 	name_str: &str,
 	input: &TokenStream,
-	fields: &Fields,
-	crate_ident: &TokenStream,
+	fields: &Fields
 ) -> TokenStream {
 	match *fields {
 		Fields::Named(ref fields) => {
@@ -171,7 +153,7 @@ fn create_instance(
 					Some(a) => format!("{}::{}", name_str, a),
 					None => format!("{}", name_str), // Should never happen, fields are named.
 				};
-				let decode = create_decode_expr(f, &field_name, input, crate_ident);
+				let decode = create_decode_expr(f, &field_name, input);
 
 				quote_spanned! { f.span() =>
 					#name_ident: #decode
@@ -179,7 +161,7 @@ fn create_instance(
 			});
 
 			quote_spanned! { fields.span() =>
-				::core::result::Result::Ok(#name {
+				Ok(#name {
 					#( #recurse, )*
 				})
 			}
@@ -188,18 +170,18 @@ fn create_instance(
 			let recurse = fields.unnamed.iter().enumerate().map(|(i, f) | {
 				let field_name = format!("{}.{}", name_str, i);
 
-				create_decode_expr(f, &field_name, input, crate_ident)
+				create_decode_expr(f, &field_name, input)
 			});
 
 			quote_spanned! { fields.span() =>
-				::core::result::Result::Ok(#name (
+				Ok(#name (
 					#( #recurse, )*
 				))
 			}
 		},
 		Fields::Unit => {
 			quote_spanned! { fields.span() =>
-				::core::result::Result::Ok(#name)
+				Ok(#name)
 			}
 		},
 	}

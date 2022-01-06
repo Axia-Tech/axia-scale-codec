@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use bitvec::{vec::BitVec, order::Msb0, order::BitOrder, store::BitStore};
 use honggfuzz::fuzz;
-use axia_scale_codec::{Encode, Decode, Compact};
+use parity_scale_codec::{Encode, Decode, Compact};
 use honggfuzz::arbitrary::{Arbitrary, Unstructured, Result as ArbResult};
 
 #[derive(Encode, Decode, Clone, PartialEq, Debug, Arbitrary)]
@@ -15,8 +15,8 @@ pub struct MockStruct{
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BitVecWrapper<O: BitOrder, T: BitStore>(BitVec<O, T>);
 
-impl<'a, O: 'static + BitOrder, T: 'static + BitStore + Arbitrary<'a>> Arbitrary<'a> for BitVecWrapper<O, T> {
-	fn arbitrary(u: &mut Unstructured<'a>) -> ArbResult<Self> {
+impl<O: 'static + BitOrder, T: 'static + BitStore + Arbitrary> Arbitrary for BitVecWrapper<O, T> {
+	fn arbitrary(u: &mut Unstructured<'_>) -> ArbResult<Self> {
 		let v = Vec::<T>::arbitrary(u)?;
 		Ok(BitVecWrapper(BitVec::<O, T>::from_vec(v)))
 	}
