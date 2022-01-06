@@ -85,9 +85,9 @@
 //! ```
 //! # // Import macros if derive feature is not used.
 //! # #[cfg(not(feature="derive"))]
-//! # use parity_scale_codec_derive::{Encode, Decode};
+//! # use axia_scale_codec_derive::{Encode, Decode};
 //!
-//! use parity_scale_codec::{Encode, Decode};
+//! use axia_scale_codec::{Encode, Decode};
 //!
 //! #[derive(Debug, PartialEq, Encode, Decode)]
 //! enum EnumType {
@@ -136,9 +136,9 @@
 //! ```
 //! # // Import macros if derive feature is not used.
 //! # #[cfg(not(feature="derive"))]
-//! # use parity_scale_codec_derive::{Encode, Decode};
+//! # use axia_scale_codec_derive::{Encode, Decode};
 //!
-//! use parity_scale_codec::{Encode, Decode, Compact, HasCompact};
+//! use axia_scale_codec::{Encode, Decode, Compact, HasCompact};
 //!
 //! #[derive(Debug, PartialEq, Encode, Decode)]
 //! struct Test1CompactHasCompact<T: HasCompact> {
@@ -165,10 +165,10 @@
 //! ```rust
 //! # // Import macros if derive feature is not used.
 //! # #[cfg(not(feature="derive"))]
-//! # use parity_scale_codec_derive::{Encode, Decode};
+//! # use axia_scale_codec_derive::{Encode, Decode};
 //!
 //! use serde_derive::{Serialize, Deserialize};
-//! use parity_scale_codec::{Encode, Decode, Compact, HasCompact, CompactAs, Error};
+//! use axia_scale_codec::{Encode, Decode, Compact, HasCompact, CompactAs, Error};
 //!
 //! #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 //! #[derive(PartialEq, Eq, Clone)]
@@ -240,14 +240,14 @@ pub extern crate alloc;
 #[cfg(feature = "axia-scale-codec-derive")]
 #[allow(unused_imports)]
 #[macro_use]
-extern crate parity_scale_codec_derive;
+extern crate axia_scale_codec_derive;
 
 #[cfg(all(feature = "std", test))]
 #[macro_use]
 extern crate serde_derive;
 
 #[cfg(feature = "axia-scale-codec-derive")]
-pub use parity_scale_codec_derive::*;
+pub use axia_scale_codec_derive::*;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
