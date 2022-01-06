@@ -40,8 +40,8 @@ fn include_axia_scale_codec_crate() -> proc_macro2::TokenStream {
 		quote!( extern crate axia_scale_codec as _axia_scale_codec; )
 	} else {
 		match crate_name("axia-scale-codec") {
-			Ok(parity_codec_crate) => {
-				let ident = Ident::new(&parity_codec_crate, Span::call_site());
+			Ok(axia_codec_crate) => {
+				let ident = Ident::new(&axia_codec_crate, Span::call_site());
 				quote!( extern crate #ident as _axia_scale_codec; )
 			},
 			Err(e) => Error::new(Span::call_site(), &e).to_compile_error(),
@@ -51,14 +51,14 @@ fn include_axia_scale_codec_crate() -> proc_macro2::TokenStream {
 
 /// Wraps the impl block in a "dummy const"
 fn wrap_with_dummy_const(impl_block: proc_macro2::TokenStream) -> proc_macro::TokenStream {
-	let parity_codec_crate = include_axia_scale_codec_crate();
+	let axia_codec_crate = include_axia_scale_codec_crate();
 
 	let generated = quote! {
 		const _: () = {
 			#[allow(unknown_lints)]
 			#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
 			#[allow(rust_2018_idioms)]
-			#parity_codec_crate
+			#axia_codec_crate
 			#impl_block
 		};
 	};

@@ -2,7 +2,7 @@
 name = "axia-scale-codec-derive"
 description = "Serialization and deserialization derive macro for AXIA SCALE Codec"
 version = "2.0.0"
-authors = ["AXIA Technologies <admin@parity.io>"]
+authors = ["AXIA Technologies <sankar.boro@zeeve.io>"]
 license = "Apache-2.0"
 edition = "2018"
 

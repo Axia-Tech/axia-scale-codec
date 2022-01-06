@@ -1,7 +1,7 @@
 [package]
 name = "codec-fuzzer"
 version = "0.1.0"
-authors = ["AXIA Technologies <admin@parity.io>", "Vincent Ulitzsch <vincent@srlabs.de>"]
+authors = ["AXIA Technologies <sankar.boro@zeeve.io>", "Vincent Ulitzsch <vincent@srlabs.de>"]
 edition = "2018"
 publish = false
 

@@ -2,9 +2,9 @@
 name = "axia-scale-codec"
 description = "SCALE - Simple Concatenating Aggregated Little Endians"
 version = "2.0.0"
-authors = ["AXIA Technologies <admin@parity.io>"]
+authors = ["AXIA Technologies <sankar.boro@zeeve.io>"]
 license = "Apache-2.0"
-repository = "https://github.com/paritytech/axia-scale-codec"
+repository = "https://github.com/axia-tech/axia-scale-codec"
 categories = ["encoding"]
 edition = "2018"
 
