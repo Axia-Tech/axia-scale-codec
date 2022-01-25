@@ -178,11 +178,6 @@ mod tests {
 	}
 
 	#[test]
-	// Flaky test due to:
-	// * https://github.com/bitvecto-rs/bitvec/issues/135
-	// * https://github.com/rust-lang/miri/issues/1866
-	#[cfg(not(miri))]
-
 	fn bitvec_u16() {
 		for v in &test_data!(u16) {
 			let encoded = v.encode();
@@ -191,10 +186,6 @@ mod tests {
 	}
 
 	#[test]
-	// Flaky test due to:
-	// * https://github.com/bitvecto-rs/bitvec/issues/135
-	// * https://github.com/rust-lang/miri/issues/1866
-	#[cfg(not(miri))]
 	fn bitvec_u32() {
 		for v in &test_data!(u32) {
 			let encoded = v.encode();
@@ -203,14 +194,9 @@ mod tests {
 	}
 
 	#[test]
-	// Flaky test due to:
-	// * https://github.com/bitvecto-rs/bitvec/issues/135
-	// * https://github.com/rust-lang/miri/issues/1866
-	#[cfg(not(miri))]
-
 	fn bitvec_u64() {
 		for v in &test_data!(u64) {
-			let encoded = v.encode();
+			let encoded = dbg!(v.encode());
 			assert_eq!(*v, BitVec::<Msb0, u64>::decode(&mut &encoded[..]).unwrap());
 		}
 	}
@@ -225,10 +211,6 @@ mod tests {
 	}
 
 	#[test]
-	// Flaky test due to:
-	// * https://github.com/bitvecto-rs/bitvec/issues/135
-	// * https://github.com/rust-lang/miri/issues/1866
-	#[cfg(not(miri))]
 	fn bitbox() {
 		let data: &[u8] = &[5, 10];
 		let slice = BitSlice::<Msb0, u8>::from_slice(data).unwrap();

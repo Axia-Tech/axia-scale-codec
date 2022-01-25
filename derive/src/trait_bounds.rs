@@ -14,7 +14,7 @@
 
 use std::iter;
 
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::Ident;
 use syn::{
 	spanned::Spanned,
 	visit::{self, Visit},
@@ -112,7 +112,6 @@ pub fn add(
 	codec_bound: syn::Path,
 	codec_skip_bound: Option<syn::Path>,
 	dumb_trait_bounds: bool,
-	crate_ident: &TokenStream,
 ) -> Result<()> {
 	let ty_params = generics.type_params().map(|p| p.ident.clone()).collect::<Vec<_>>();
 	if ty_params.is_empty() {
@@ -147,7 +146,7 @@ pub fn add(
 				where_clause.predicates.push(parse_quote!(#ty : #codec_bound))
 			});
 
-		let has_compact_bound: syn::Path = parse_quote!(#crate_ident::HasCompact);
+		let has_compact_bound: syn::Path = parse_quote!(_axia_scale_codec::HasCompact);
 		compact_types
 			.into_iter()
 			.for_each(|ty| {

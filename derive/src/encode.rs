@@ -30,7 +30,6 @@ type FieldsList = Punctuated<Field, Comma>;
 fn encode_single_field(
 	field: &Field,
 	field_name: TokenStream,
-	crate_ident: &TokenStream,
 ) -> TokenStream {
 	let encoded_as = utils::get_encoded_as_type(field);
 	let compact = utils::is_compact(field);
@@ -53,8 +52,8 @@ fn encode_single_field(
 		let field_type = &field.ty;
 		quote_spanned! {
 			field.span() => {
-				<<#field_type as #crate_ident::HasCompact>::Type as
-				#crate_ident::EncodeAsRef<'_, #field_type>>::RefType::from(#field_name)
+				<<#field_type as _axia_scale_codec::HasCompact>::Type as
+					_axia_scale_codec::EncodeAsRef<'_, #field_type>>::RefType::from(#field_name)
 			}
 		}
 	} else if let Some(encoded_as) = encoded_as {
@@ -62,7 +61,7 @@ fn encode_single_field(
 		quote_spanned! {
 			field.span() => {
 				<#encoded_as as
-				#crate_ident::EncodeAsRef<'_, #field_type>>::RefType::from(#field_name)
+					_axia_scale_codec::EncodeAsRef<'_, #field_type>>::RefType::from(#field_name)
 			}
 		}
 	} else {
@@ -75,19 +74,19 @@ fn encode_single_field(
 	let i_self = quote! { self };
 
 	quote_spanned! { field.span() =>
-			fn encode_to<__CodecOutputEdqy: #crate_ident::Output + ?::core::marker::Sized>(
+			fn encode_to<__CodecOutputEdqy: _axia_scale_codec::Output + ?Sized>(
 				&#i_self,
 				__codec_dest_edqy: &mut __CodecOutputEdqy
 			) {
-				#crate_ident::Encode::encode_to(&#final_field_variable, __codec_dest_edqy)
+				_axia_scale_codec::Encode::encode_to(&#final_field_variable, __codec_dest_edqy)
 			}
 
-			fn encode(&#i_self) -> #crate_ident::alloc::vec::Vec<::core::primitive::u8> {
-				#crate_ident::Encode::encode(&#final_field_variable)
+			fn encode(&#i_self) -> _axia_scale_codec::alloc::vec::Vec<u8> {
+				_axia_scale_codec::Encode::encode(&#final_field_variable)
 			}
 
 			fn using_encoded<R, F: ::core::ops::FnOnce(&[::core::primitive::u8]) -> R>(&#i_self, f: F) -> R {
-				#crate_ident::Encode::using_encoded(&#final_field_variable, f)
+				_axia_scale_codec::Encode::using_encoded(&#final_field_variable, f)
 			}
 	}
 }
@@ -96,7 +95,6 @@ fn encode_fields<F>(
 	dest: &TokenStream,
 	fields: &FieldsList,
 	field_name: F,
-	crate_ident: &TokenStream,
 ) -> TokenStream where
 	F: Fn(usize, &Option<Ident>) -> TokenStream,
 {
@@ -119,10 +117,10 @@ fn encode_fields<F>(
 			let field_type = &f.ty;
 			quote_spanned! {
 				f.span() => {
-					#crate_ident::Encode::encode_to(
+					_axia_scale_codec::Encode::encode_to(
 						&<
-							<#field_type as #crate_ident::HasCompact>::Type as
-							#crate_ident::EncodeAsRef<'_, #field_type>
+							<#field_type as _axia_scale_codec::HasCompact>::Type as
+							_axia_scale_codec::EncodeAsRef<'_, #field_type>
 						>::RefType::from(#field),
 						#dest,
 					);
@@ -132,10 +130,10 @@ fn encode_fields<F>(
 			let field_type = &f.ty;
 			quote_spanned! {
 				f.span() => {
-					#crate_ident::Encode::encode_to(
+					_axia_scale_codec::Encode::encode_to(
 						&<
 							#encoded_as as
-							#crate_ident::EncodeAsRef<'_, #field_type>
+							_axia_scale_codec::EncodeAsRef<'_, #field_type>
 						>::RefType::from(#field),
 						#dest,
 					);
@@ -147,7 +145,7 @@ fn encode_fields<F>(
 			}
 		} else {
 			quote_spanned! { f.span() =>
-				#crate_ident::Encode::encode_to(#field, #dest);
+					_axia_scale_codec::Encode::encode_to(#field, #dest);
 			}
 		}
 	});
@@ -157,7 +155,7 @@ fn encode_fields<F>(
 	}
 }
 
-fn try_impl_encode_single_field_optimisation(data: &Data, crate_ident: &TokenStream) -> Option<TokenStream> {
+fn try_impl_encode_single_field_optimisation(data: &Data) -> Option<TokenStream> {
 	match *data {
 		Data::Struct(ref data) => {
 			match data.fields {
@@ -166,8 +164,7 @@ fn try_impl_encode_single_field_optimisation(data: &Data, crate_ident: &TokenStr
 					let name = &field.ident;
 					Some(encode_single_field(
 						field,
-						quote!(&self.#name),
-						crate_ident,
+						quote!(&self.#name)
 					))
 				},
 				Fields::Unnamed(ref fields) if utils::filter_skip_unnamed(fields).count() == 1 => {
@@ -176,8 +173,7 @@ fn try_impl_encode_single_field_optimisation(data: &Data, crate_ident: &TokenStr
 
 					Some(encode_single_field(
 						field,
-						quote!(&self.#id),
-						crate_ident,
+						quote!(&self.#id)
 					))
 				},
 				_ => None,
@@ -187,7 +183,7 @@ fn try_impl_encode_single_field_optimisation(data: &Data, crate_ident: &TokenStr
 	}
 }
 
-fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> TokenStream {
+fn impl_encode(data: &Data, type_name: &Ident) -> TokenStream {
 	let self_ = quote!(self);
 	let dest = &quote!(__codec_dest_edqy);
 	let encoding = match *data {
@@ -197,7 +193,6 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 					dest,
 					&fields.named,
 					|_, name| quote!(&#self_.#name),
-					crate_ident,
 				),
 				Fields::Unnamed(ref fields) => encode_fields(
 					dest,
@@ -206,7 +201,6 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 						let i = syn::Index::from(i);
 						quote!(&#self_.#i)
 					},
-					crate_ident,
 				),
 				Fields::Unit => quote!(),
 			}
@@ -242,7 +236,6 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 							dest,
 							&fields.named,
 							|a, b| field_name(a, b),
-							crate_ident,
 						);
 
 						quote_spanned! { f.span() =>
@@ -268,7 +261,6 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 							dest,
 							&fields.unnamed,
 							|a, b| field_name(a, b),
-							crate_ident,
 						);
 
 						quote_spanned! { f.span() =>
@@ -300,8 +292,9 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 			"Union types are not supported."
 		).to_compile_error(),
 	};
+
 	quote! {
-		fn encode_to<__CodecOutputEdqy: #crate_ident::Output + ?::core::marker::Sized>(
+		fn encode_to<__CodecOutputEdqy: _axia_scale_codec::Output + ?Sized>(
 			&#self_,
 			#dest: &mut __CodecOutputEdqy
 		) {
@@ -310,11 +303,11 @@ fn impl_encode(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> Tok
 	}
 }
 
-pub fn quote(data: &Data, type_name: &Ident, crate_ident: &TokenStream) -> TokenStream {
-	if let Some(implementation) = try_impl_encode_single_field_optimisation(data, crate_ident) {
+pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
+	if let Some(implementation) = try_impl_encode_single_field_optimisation(data) {
 		implementation
 	} else {
-		impl_encode(data, type_name, crate_ident)
+		impl_encode(data, type_name)
 	}
 }
 

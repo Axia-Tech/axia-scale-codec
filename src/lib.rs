@@ -281,7 +281,6 @@ mod depth_limit;
 mod encode_append;
 mod encode_like;
 mod error;
-#[cfg(feature = "max-encoded-len")]
 mod max_encoded_len;
 
 pub use self::error::Error;
@@ -298,7 +297,6 @@ pub use self::decode_all::DecodeAll;
 pub use self::depth_limit::DecodeLimit;
 pub use self::encode_append::EncodeAppend;
 pub use self::encode_like::{EncodeLike, Ref};
-#[cfg(feature = "max-encoded-len")]
 pub use max_encoded_len::MaxEncodedLen;
 /// Derive macro for [`MaxEncodedLen`][max_encoded_len::MaxEncodedLen].
 ///
@@ -343,5 +341,5 @@ pub use max_encoded_len::MaxEncodedLen;
 /// #[codec(crate = $crate::codec)]
 /// struct Example;
 /// ```
-#[cfg(all(feature = "derive", feature = "max-encoded-len"))]
+#[cfg(feature = "derive")]
 pub use axia_scale_codec_derive::MaxEncodedLen;
