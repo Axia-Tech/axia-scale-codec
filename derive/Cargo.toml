@@ -16,7 +16,7 @@ proc-macro2 = "1.0.6"
 proc-macro-crate = "1.0.0"
 
 [dev-dependencies]
-axia-scale-codec = { path = ".." }
+axia-scale-codec = { git = "https://github.com/axia-tech/axia-scale-codec", branch = "v2.3.1", version = "2.3.1" }
 
 [features]
 # Enables the new `MaxEncodedLen` trait.
